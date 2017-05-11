@@ -62,8 +62,6 @@ int batteryCellCount = 0; // representation of the battery lipo cell count
 bool displayingBatteryState = true; // whether or not we are displying the volts of the battery
 bool captureDisplayState = true; // whether or not to capture the state of the display
 int batteryIndicatorBlinks = 0;
-int test = 0;  // todo remove me!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
 
 int ch1; // Steering - Joystick x-axis
 int ch2; // Thottle - Joystick y-axis
@@ -268,10 +266,6 @@ void loop() {
     statusIndicatorIndex++;
     if (statusIndicatorIndex > statusIndicatorSize) { // avoid overflow on status indicator array
       statusIndicatorIndex = 0;
-      test++;  // todo remove me!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      if (test > 6) {
-        test = 0;
-      }
       captureDisplayState = true; // after going over the end of the indicator array, restart display capture
     }
   }
@@ -280,19 +274,6 @@ void loop() {
       batteryTotal += batteryReadings[i];
     }
     batteryVoltage = batteryTotal / 10; // ten sample rolling average
-
-    if (test > 4) {
-      batteryVoltage = threeCellTenPercent - 1;
-    } else if (test > 2) {
-      batteryVoltage = threeCellTwentyPercent - 1;
-    } else {
-      batteryVoltage = threeCellTwentyPercent + 2;
-    }
-    Serial.print("calling blinks with: ");
-    Serial.println(batteryVoltage);
-    batteryIndicatorBlinks = batteryBlinkCount(batteryVoltage);
-    Serial.print("battery blinks are: ");
-    Serial.println(batteryIndicatorBlinks);
 
     for (int i = 0; i < statusIndicatorSize; i++) {
       statusIndicator[i] = false;
