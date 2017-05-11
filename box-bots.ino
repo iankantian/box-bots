@@ -1,11 +1,10 @@
-/* Code for 2017 Season Box Bots robot control board
-   Arduino Nano clone w/ CH340 USB connected to TB6612 motor driver board
+/*
+    Code for 2017 Season Box Bots robot control board
+    Arduino Nano clone w/ CH340 USB connected to TB6612 motor driver board
 
-
-   CH1 - Steering
-   CH2 - Throttle
-   CH3 - Weopon
-
+    CH1 - Steering
+    CH2 - Throttle
+    CH3 - Weopon
 */
 
 #define   lpwm    3     // pulse width modulation for left motor is pin 3
@@ -20,12 +19,51 @@
 #define   reverse 1
 #define   coast   2
 #define   brake   3
-#define   rightMotor 0
+#define   rightMotor  0
 #define   leftMotor 1
 
-#define   in_ch1   10    // input channel one is on pin 10
-#define   in_ch2   11    // input channel two is on pin 11
-#define   in_ch3   12    // input channel three is on pin 12
+#define   in_ch1  10    // input channel one is on pin 10
+#define   in_ch2  11    // input channel two is on pin 11
+#define   in_ch3  12    // input channel three is on pin 12
+
+#define batterySensePin A5  // through 5:1 voltage divider
+#define outputLED 13
+
+/**
+   these were measured directly with a variable voltage supply and multimeter,
+   and some reference to https://www.helifreak.com/showthread.php?t=333661
+   by reading the analog reading on the voltage divider and using Serial.println
+   I could compare the analog measurements with the actual battery voltage.
+   I want a warning at 20% battery copacity and a more urgent one at 10% capacity.
+   the tricky part is doing this AND giving a 'Weapon Active' alert with just
+   one LED.
+*/
+#define twoCellThreshold 102  // minimum reading to detect 2 cell lipo operation
+#define twoCellTenPercent 130
+#define twoCellTwentyPercent 136
+#define threeCellThreshold 157 // minimum reading to detect 3 cell lipo operation
+#define threeCellTenPercent 200
+#define threeCellTwentyPercent 206
+#define tenPercent 10 // representations of battery status
+#define twentyPercent 20
+#define batteryFull 100
+
+int batteryTotal = 0;
+int batteryVoltage = 0;
+const int batteryNumSamples = 10;
+int statusIndicatorIndex = 0; // where we are in the task of displaying the battery state
+const int statusIndicatorSize = 20;
+int statusIndicator[statusIndicatorSize]; // how many blinks we are going to give in the indication
+int loopsPerTick = 4; // how many loops between updating the display
+int loopsTickIndex = 0; // how many loops between updating the display
+int batteryReadings[batteryNumSamples]; // we'll do a rolling average of 10 samples of the sense pin
+int batterySenseIndex = 0; // the place in the array of readings
+int batteryCellCount = 0; // representation of the battery lipo cell count
+bool displayingBatteryState = true; // whether or not we are displying the volts of the battery
+bool captureDisplayState = true; // whether or not to capture the state of the display
+int batteryIndicatorBlinks = 0;
+int test = 0;  // todo remove me!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 
 int ch1; // Steering - Joystick x-axis
 int ch2; // Thottle - Joystick y-axis
@@ -97,6 +135,7 @@ void setup() {
   pinMode(rpin1, OUTPUT);
   pinMode(rpin2, OUTPUT);
   pinMode(standby, OUTPUT);
+  pinMode(outputLED, OUTPUT);
 
   pinMode(in_ch1, INPUT);       // channel one of RC receiver, x-axis steering
   pinMode(in_ch2, INPUT);       // channel two of RC receiver, y-axis throttle
@@ -107,10 +146,54 @@ void setup() {
   digitalWrite(rpin1, LOW);
   digitalWrite(rpin2, LOW);
   digitalWrite(standby, HIGH);  // turn on the things
-  
-  Serial.begin(9600); // Pour a bowl of Serial (for debugging)
+  digitalWrite(outputLED, HIGH); // turn off the indicator light.
+
+  // get initial battery level to decide what kind of battery we have installed!
+  for (batterySenseIndex = 0; batterySenseIndex < batteryNumSamples; batterySenseIndex++) {
+    batteryReadings[batterySenseIndex] = analogRead(batterySensePin);
+    batteryTotal += batteryReadings[batterySenseIndex];
+  }
+  batteryVoltage = batteryTotal / 10;
+
+  batteryVoltage = threeCellTwentyPercent + 1; // remove me !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+  batterySenseIndex = 0;
+  Serial.begin(9600);
+
+  if (batteryVoltage < twoCellThreshold) {
+    Serial.println("1 cell battery");
+    batteryCellCount = 1;
+  } else if (batteryVoltage < threeCellThreshold) {
+    Serial.println("2 cell battery");
+    batteryCellCount = 2;
+  } else {
+    Serial.println("3 cell battery");
+    batteryCellCount = 3;
+  }
 }
 
+int batteryBlinkCount(int voltage) {
+  int blinks = 0;
+  if (batteryCellCount == 2) {
+    if (voltage > twoCellTwentyPercent) {
+      blinks = 1;
+    } else if (voltage > twoCellTenPercent) {
+      blinks = 3;
+    } else {
+      blinks = 6;
+    }
+  } else if (batteryCellCount == 3) {
+    if (voltage > threeCellTwentyPercent) {
+      blinks = 1;
+    } else if (voltage > threeCellTenPercent) {
+      blinks = 3;
+    } else {
+      blinks = 6;
+    }
+  }
+  return blinks;
+}
 
 void loop() {
   // pulsein returning value of 1000 to 2000 (1500 default neutral position)
@@ -137,7 +220,6 @@ void loop() {
   if (abs(ch1) < 15) {
     ch1 = 0;
   }
-
   if (abs(ch2) < 15) {
     ch2 = 0;
   }
@@ -146,19 +228,6 @@ void loop() {
 
   rightMotorSpeed = constrain( throttle + spin, -255, 255);
   leftMotorSpeed = constrain( throttle - spin, -255, 255 );
-
-
-//  Serial.print("rightMotorSpeed: ");
-//  Serial.print(rightMotorSpeed);
-//  Serial.print("\tleftMotorSpeed: ");
-//  Serial.print(leftMotorSpeed);
-
-    Serial.print(ch1);
-    Serial.print( " ");
-    Serial.print(ch2);
-    Serial.print( " ");
-    Serial.print(ch3);
-
 
   if (rightMotorSpeed < 0) {  // outside deadband, in reverse
     //   Serial.print(" Right Back ");
@@ -185,6 +254,67 @@ void loop() {
 
   analogWrite(lpwm, abs(leftMotorSpeed));
   analogWrite(rpwm, abs(rightMotorSpeed));
-  
-  Serial.println();
+
+
+  batterySenseIndex++;
+  if (batterySenseIndex > batteryNumSamples) { // avoid overflow on battery sense array
+    batterySenseIndex = 0;
+  }
+  batteryReadings[batterySenseIndex] = analogRead(batterySensePin);
+
+  loopsTickIndex++;
+  if (loopsTickIndex > loopsPerTick) {
+    loopsTickIndex = 0;
+    statusIndicatorIndex++;
+    if (statusIndicatorIndex > statusIndicatorSize) { // avoid overflow on status indicator array
+      statusIndicatorIndex = 0;
+      test++;  // todo remove me!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      if (test > 6) {
+        test = 0;
+      }
+      captureDisplayState = true; // after going over the end of the indicator array, restart display capture
+    }
+  }
+  if (captureDisplayState) { // if we are displaying battery status, we shouldn't try to change its state
+    for (int i = 0; i < batteryNumSamples; i++) { // calculate the voltage average for the last 10 samples
+      batteryTotal += batteryReadings[i];
+    }
+    batteryVoltage = batteryTotal / 10; // ten sample rolling average
+
+    if (test > 4) {
+      batteryVoltage = threeCellTenPercent - 1;
+    } else if (test > 2) {
+      batteryVoltage = threeCellTwentyPercent - 1;
+    } else {
+      batteryVoltage = threeCellTwentyPercent + 2;
+    }
+    Serial.print("calling blinks with: ");
+    Serial.println(batteryVoltage);
+    batteryIndicatorBlinks = batteryBlinkCount(batteryVoltage);
+    Serial.print("battery blinks are: ");
+    Serial.println(batteryIndicatorBlinks);
+
+    for (int i = 0; i < statusIndicatorSize; i++) {
+      statusIndicator[i] = false;
+    }
+    for (int i = 0; i < batteryIndicatorBlinks * 2; i += 2) {
+      statusIndicator[i] = false;
+      statusIndicator[i + 1] = true;
+    }
+    for (int i = batteryIndicatorBlinks * 2; i < statusIndicatorSize; i++) {
+      if (ch3 < 25) {
+        statusIndicator[i] = false;
+      } else {
+        statusIndicator[i] = true;
+      }
+    }
+    captureDisplayState = false;
+  }
+
+  // now update the LED with the display data
+  if (statusIndicator[statusIndicatorIndex]) {
+    digitalWrite(outputLED, LOW);
+  } else {
+    digitalWrite(outputLED, HIGH);
+  }
 }
