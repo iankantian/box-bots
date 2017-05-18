@@ -24,7 +24,6 @@
 
 #define   in_ch1  A0    // input channel one is on pin 10
 #define   in_ch2  A1    // input channel two is on pin 12
-#define   in_ch3  A2    // input channel three is on pin 11
 
 int ch1; // Steering - Joystick x-axis
 int ch2; // Thottle - Joystick y-axis
@@ -99,7 +98,6 @@ void setup() {
 
   pinMode(in_ch1, INPUT);       // channel one of RC receiver, x-axis steering
   pinMode(in_ch2, INPUT);       // channel two of RC receiver, y-axis throttle
-  pinMode(in_ch3, INPUT);       // channel three of RC receiver, switch
 
   digitalWrite(lpin1, LOW);
   digitalWrite(lpin2, LOW);
@@ -123,17 +121,14 @@ void loop() {
   if (ch2 < 800) {
     ch2 = 1500;
   }
-  if (ch3 < 800) {
-    ch1 = 1000;
-  }
 
   ch1 = map(ch1, 1000, 2000, -255, 255); //center over 500
   ch2 = map(ch2, 1000, 2000, -255, 255); //center over 500
 
-  if (abs(ch1) < 15) {
+  if (abs(ch1) < 10) {
     ch1 = 0;
   }
-  if (abs(ch2) < 15) {
+  if (abs(ch2) < 6) {
     ch2 = 0;
   }
   spin = -1 * ch1;
